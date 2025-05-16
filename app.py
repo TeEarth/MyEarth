@@ -26,5 +26,3 @@ if query:
         st.dataframe(result)
     else:
         st.warning("ไม่พบข้อมูลที่ค้นหา")
-
-commit
