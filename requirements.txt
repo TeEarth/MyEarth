@@ -1,5 +1,7 @@
 streamlit
-pymupdf
+PyMuPDF
 Pillow
 sentence-transformers
 faiss-cpu
+transformers
+torch
