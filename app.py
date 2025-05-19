@@ -11,7 +11,6 @@ st.title("📄 แอปอ่าน PDF + ถามตอบด้วย AI")
 
 uploaded_file = st.file_uploader("📤 อัปโหลดไฟล์ PDF", type="pdf")
 
-# โหลดโมเดลฝังข้อความ
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -19,8 +18,8 @@ def load_model():
 model = load_model()
 
 # เก็บข้อความทั้งหมด
-all_text_blocks = []
-page_text_map = []  # เก็บหน้าที่ของข้อความ
+all_lines = []
+page_map = []
 
 if uploaded_file:
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
@@ -29,12 +28,12 @@ if uploaded_file:
         page = doc[page_number]
         text = page.get_text()
 
-        # แยกข้อความเป็นบล็อก
-        for block in text.split("\n\n"):
-            clean_block = block.strip()
-            if clean_block:
-                all_text_blocks.append(clean_block)
-                page_text_map.append(page_number + 1)
+        # แยกเป็น "บรรทัด"
+        for line in text.splitlines():
+            clean_line = line.strip()
+            if clean_line:
+                all_lines.append(clean_line)
+                page_map.append(page_number + 1)
 
         # แสดงข้อความและภาพ
         st.subheader(f"📄 หน้า {page_number + 1}")
@@ -55,24 +54,24 @@ if uploaded_file:
         else:
             st.info("ไม่มีภาพในหน้านี้")
 
-    # 🔎 AI: สร้าง embedding และ FAISS index
-    if all_text_blocks:
+    # 🔍 AI: ค้นหาบรรทัดที่ใกล้เคียงคำถาม
+    if all_lines:
         st.markdown("---")
         st.header("❓ ถาม-ตอบจากเนื้อหา PDF ด้วย AI")
         user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
 
-        # สร้างเวกเตอร์จากข้อความใน PDF
-        embeddings = model.encode(all_text_blocks)
+        # สร้างเวกเตอร์ของแต่ละบรรทัด
+        embeddings = model.encode(all_lines)
         dimension = embeddings.shape[1]
         index = faiss.IndexFlatL2(dimension)
         index.add(np.array(embeddings))
 
         if user_question:
-            # สร้างเวกเตอร์ของคำถาม
+            # เวกเตอร์ของคำถาม
             question_vec = model.encode([user_question])
-            D, I = index.search(np.array(question_vec), k=3)  # คืน 3 อันดับที่ใกล้เคียงที่สุด
+            D, I = index.search(np.array(question_vec), k=3)
 
-            st.subheader("🔎 ข้อความที่เกี่ยวข้องที่สุด:")
+            st.subheader("🔎 บรรทัดที่เกี่ยวข้องมากที่สุด:")
             for rank, idx in enumerate(I[0]):
-                st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_text_map[idx]})")
-                st.success(all_text_blocks[idx])
+                st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_map[idx]})")
+                st.success(all_lines[idx])
