@@ -18,12 +18,11 @@ def load_model():
 
 @st.cache_resource
 def load_qa_model():
-    return pipeline("question-answering", model="deepset/xlm-roberta-base-squad2")
+    return pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
 
 model = load_model()
 qa_model = load_qa_model()
 
-# เก็บข้อความทั้งหมด
 all_lines = []
 page_map = []
 
@@ -34,14 +33,12 @@ if uploaded_file:
         page = doc[page_number]
         text = page.get_text()
 
-        # แยกเป็น "บรรทัด"
         for line in text.splitlines():
             clean_line = line.strip()
             if clean_line:
                 all_lines.append(clean_line)
                 page_map.append(page_number + 1)
 
-        # แสดงข้อความและภาพ
         st.subheader(f"📄 หน้า {page_number + 1}")
         if text.strip():
             st.text_area("📚 ข้อความในหน้านี้", text, height=200)
@@ -60,20 +57,17 @@ if uploaded_file:
         else:
             st.info("ไม่มีภาพในหน้านี้")
 
-    # 🔍 AI: ค้นหาบรรทัดที่ใกล้เคียงคำถาม
     if all_lines:
         st.markdown("---")
         st.header("❓ ถาม-ตอบจากเนื้อหา PDF ด้วย AI")
         user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
 
-        # สร้างเวกเตอร์ของแต่ละบรรทัด
         embeddings = model.encode(all_lines)
         dimension = embeddings.shape[1]
         index = faiss.IndexFlatL2(dimension)
         index.add(np.array(embeddings))
 
         if user_question:
-            # เวกเตอร์ของคำถาม
             question_vec = model.encode([user_question])
             D, I = index.search(np.array(question_vec), k=3)
 
@@ -82,7 +76,6 @@ if uploaded_file:
                 st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_map[idx]})")
                 st.success(all_lines[idx])
 
-            # ใช้ context ที่ใกล้ที่สุดตอบคำถาม
             context = all_lines[I[0][0]]
             with st.spinner("🤖 AI กำลังสกัดคำตอบ..."):
                 result = qa_model(question=user_question, context=context)
