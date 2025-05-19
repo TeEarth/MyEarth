@@ -5,6 +5,7 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
+from transformers import pipeline
 
 st.set_page_config(page_title="PDF AI Q&A App", layout="wide")
 st.title("📄 แอปอ่าน PDF + ถามตอบด้วย AI")
@@ -15,7 +16,12 @@ uploaded_file = st.file_uploader("📤 อัปโหลดไฟล์ PDF", t
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
+@st.cache_resource
+def load_qa_model():
+    return pipeline("question-answering", model="deepset/xlm-roberta-base-squad2")
+
 model = load_model()
+qa_model = load_qa_model()
 
 # เก็บข้อความทั้งหมด
 all_lines = []
@@ -75,3 +81,13 @@ if uploaded_file:
             for rank, idx in enumerate(I[0]):
                 st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_map[idx]})")
                 st.success(all_lines[idx])
+
+            # ใช้ context ที่ใกล้ที่สุดตอบคำถาม
+            context = all_lines[I[0][0]]
+            with st.spinner("🤖 AI กำลังสกัดคำตอบ..."):
+                result = qa_model(question=user_question, context=context)
+                answer = result['answer']
+
+            st.markdown("---")
+            st.subheader("✅ คำตอบจาก AI:")
+            st.success(answer)
