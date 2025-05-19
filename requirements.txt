@@ -5,3 +5,4 @@ sentence-transformers
 faiss-cpu
 transformers
 torch
+pythainlp
