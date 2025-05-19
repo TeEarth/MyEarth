@@ -68,18 +68,26 @@ if uploaded_file:
         index.add(np.array(embeddings))
 
         if user_question:
-            question_vec = model.encode([user_question])
-            D, I = index.search(np.array(question_vec), k=3)
-
-            st.subheader("🔎 บรรทัดที่เกี่ยวข้องมากที่สุด:")
-            for rank, idx in enumerate(I[0]):
-                st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_map[idx]})")
-                st.success(all_lines[idx])
-
-            context = all_lines[I[0][0]]
-            with st.spinner("🤖 AI กำลังสกัดคำตอบ..."):
-                result = qa_model(question=user_question, context=context)
-                answer = result['answer']
+            st.subheader("🔎 บรรทัดที่มีคำถามหรือคำที่เกี่ยวข้อง:")
+        
+            # ทำให้คำถามเป็นคำเล็กทั้งหมด (lowercase) เพื่อให้ค้นหาแบบไม่สนใจตัวพิมพ์ใหญ่เล็ก
+            question_lower = user_question.lower()
+        
+            # ค้นหาบรรทัดที่มีคำที่ตรงกับคำถาม (คำที่ปรากฏในคำถาม)
+            matched_lines = []
+            for idx, line in enumerate(all_lines):
+                # แปลงบรรทัดเป็น lowercase
+                line_lower = line.lower()
+        
+                # ถ้าคำถามอยู่ในบรรทัดนั้น (ตรวจสอบแบบง่ายๆ)
+                if any(word in line_lower for word in question_lower.split()):
+                    matched_lines.append((line, page_map[idx]))
+        
+            if matched_lines:
+                for i, (matched_line, page_num) in enumerate(matched_lines[:5]):  # แสดงสูงสุด 5 บรรทัด
+                    st.markdown(f"**{i+1}.** (หน้า {page_num}) {matched_line}")
+            else:
+                st.info("ไม่พบข้อความที่เกี่ยวข้องกับคำถาม")
 
             st.markdown("---")
             st.subheader("✅ คำตอบจาก AI:")
