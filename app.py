@@ -3,10 +3,17 @@ import fitz  # PyMuPDF
 import io
 from PIL import Image
 from sentence_transformers import SentenceTransformer
-import faiss
 import numpy as np
 from transformers import pipeline
-from pythainlp.tokenize import word_tokenize
+from nltk.tokenize import word_tokenize
+
+# ฟังก์ชันคำนวณ Jaccard similarity
+def jaccard_similarity(list1, list2):
+    set1 = set(list1)
+    set2 = set(list2)
+    if not set1 or not set2:
+        return 0
+    return len(set1.intersection(set2)) / len(set1.union(set2))
 
 st.set_page_config(page_title="PDF AI Q&A App", layout="wide")
 st.title("📄 แอปอ่าน PDF + ถามตอบด้วย AI")
@@ -26,15 +33,6 @@ qa_model = load_qa_model()
 
 all_lines = []
 page_map = []
-
-def jaccard_similarity(list1, list2):
-    set1 = set(list1)
-    set2 = set(list2)
-    intersection = set1.intersection(set2)
-    union = set1.union(set2)
-    if not union:
-        return 0
-    return len(intersection) / len(union)
 
 if uploaded_file:
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
@@ -67,58 +65,67 @@ if uploaded_file:
         else:
             st.info("ไม่มีภาพในหน้านี้")
 
-    if all_lines:
-        st.markdown("---")
-        st.header("❓ ถาม-ตอบจากเนื้อหา PDF ด้วย AI")
-        user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
+    # เก็บประวัติคำถาม-คำตอบใน session state
+    if 'qa_history' not in st.session_state:
+        st.session_state.qa_history = []
 
-        embeddings = model.encode(all_lines)
-        dimension = embeddings.shape[1]
-        index = faiss.IndexFlatL2(dimension)
-        index.add(np.array(embeddings))
+    st.markdown("---")
+    st.header("❓ ถาม-ตอบจากเนื้อหา PDF ด้วย AI")
 
-        if user_question:
-            st.subheader("🔎 บรรทัดที่มีคำถามหรือคำที่เกี่ยวข้อง:")
+    user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
 
-            # ตัดคำคำถามเป็น tokens
-            question_tokens = word_tokenize(user_question.lower())
+    if user_question:
+        question_tokens = word_tokenize(user_question.lower())
+        matched_lines = []
+        matched_indices = set()
+        thresholds = [0.7, 0.6, 0.5]
 
-            matched_lines = []
+        for threshold in thresholds:
             for idx, line in enumerate(all_lines):
-                # รวมบรรทัดก่อนหน้าและหลัง (ถ้ามี) มาเช็คด้วย
+                if idx in matched_indices:
+                    continue
                 lines_to_check = [line]
                 if idx > 0:
                     lines_to_check.insert(0, all_lines[idx - 1])
                 if idx < len(all_lines) - 1:
                     lines_to_check.append(all_lines[idx + 1])
 
-                # ตัดคำของบรรทัดที่ตรวจสอบทั้งหมด
                 tokens_to_check = []
                 for l in lines_to_check:
                     tokens_to_check.extend(word_tokenize(l.lower()))
 
-                # คำนวณ similarity
                 sim = jaccard_similarity(question_tokens, tokens_to_check)
-
-                if sim >= 0.7:  # มากกว่าหรือเท่ากับ 70%
+                if sim >= threshold:
                     matched_lines.append((line, page_map[idx], sim))
+                    matched_indices.add(idx)
 
-            if matched_lines:
-                # เรียงลำดับตามความเหมือนมากสุด
-                matched_lines.sort(key=lambda x: x[2], reverse=True)
-                for i, (matched_line, page_num, similarity) in enumerate(matched_lines[:5]):  # แสดงสูงสุด 5 บรรทัด
-                    st.markdown(f"**{i+1}.** (หน้า {page_num}) ความเหมือน: {similarity:.2%}")
-                    st.success(matched_line)
-            else:
-                st.info("ไม่พบข้อความที่เกี่ยวข้องกับคำถาม")
+            if len(matched_lines) >= 5:
+                break
 
-            st.markdown("---")
-            st.subheader("✅ คำตอบจาก AI:")
-            # นำบรรทัดที่เหมือนที่สุดมาให้ AI ตอบ
-            if matched_lines:
-                context = matched_lines[0][0]
-                result = qa_model(question=user_question, context=context)
-                answer = result.get('answer', 'ไม่พบคำตอบที่ชัดเจน')
-                st.success(answer)
-            else:
-                st.info("ไม่สามารถหาคำตอบจากเอกสารได้")
+        if matched_lines:
+            matched_lines.sort(key=lambda x: x[2], reverse=True)
+            st.subheader("🔎 บรรทัดที่เกี่ยวข้องสูงสุด:")
+            for i, (matched_line, page_num, similarity) in enumerate(matched_lines[:5]):
+                st.markdown(f"**{i+1}.** (หน้า {page_num}) ความเหมือน: {similarity:.2%}")
+                st.success(matched_line)
+
+            # ใช้บรรทัดที่เหมือนที่สุดเป็น context ถามโมเดล AI
+            context = matched_lines[0][0]
+            result = qa_model(question=user_question, context=context)
+            answer = result.get('answer', 'ไม่พบคำตอบที่ชัดเจน')
+
+        else:
+            st.info("ไม่พบข้อความที่เกี่ยวข้องกับคำถาม")
+            answer = "ไม่พบคำตอบที่ชัดเจนในเอกสาร"
+
+        # เก็บคำถาม-คำตอบใน session state
+        st.session_state.qa_history.append({"question": user_question, "answer": answer})
+
+    # แสดงประวัติถาม-ตอบทั้งหมด
+    if st.session_state.qa_history:
+        st.markdown("---")
+        st.header("💬 ประวัติถาม-ตอบของคุณ")
+        for i, qa in enumerate(st.session_state.qa_history):
+            st.markdown(f"**คำถาม {i+1}:** {qa['question']}")
+            st.markdown(f"**คำตอบ:** {qa['answer']}")
+
