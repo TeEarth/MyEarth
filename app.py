@@ -2,14 +2,25 @@ import streamlit as st
 import fitz  # PyMuPDF
 import io
 from PIL import Image
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 
-st.set_page_config(page_title="PDF Reader App", layout="wide")
-st.title("📄 แอปอ่าน PDF พร้อมแสดงข้อความและภาพ")
+st.set_page_config(page_title="PDF AI Q&A App", layout="wide")
+st.title("📄 แอปอ่าน PDF + ถามตอบด้วย AI")
 
 uploaded_file = st.file_uploader("📤 อัปโหลดไฟล์ PDF", type="pdf")
 
-# เก็บข้อความทั้งหมดจาก PDF
+# โหลดโมเดลฝังข้อความ
+@st.cache_resource
+def load_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+model = load_model()
+
+# เก็บข้อความทั้งหมด
 all_text_blocks = []
+page_text_map = []  # เก็บหน้าที่ของข้อความ
 
 if uploaded_file:
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
@@ -18,11 +29,12 @@ if uploaded_file:
         page = doc[page_number]
         text = page.get_text()
 
-        # บันทึกข้อความแบ่งเป็นบล็อก (ย่อหน้า)
+        # แยกข้อความเป็นบล็อก
         for block in text.split("\n\n"):
             clean_block = block.strip()
             if clean_block:
-                all_text_blocks.append((page_number + 1, clean_block))
+                all_text_blocks.append(clean_block)
+                page_text_map.append(page_number + 1)
 
         # แสดงข้อความและภาพ
         st.subheader(f"📄 หน้า {page_number + 1}")
@@ -38,28 +50,29 @@ if uploaded_file:
                 xref = img[0]
                 base_image = doc.extract_image(xref)
                 image_bytes = base_image["image"]
-                image_ext = base_image["ext"]
                 image = Image.open(io.BytesIO(image_bytes))
                 st.image(image, caption=f"ภาพที่ {img_index + 1}", use_column_width=True)
         else:
             st.info("ไม่มีภาพในหน้านี้")
 
-    # 🔍 ช่องใส่คำถาม
-    st.markdown("---")
-    st.header("❓ ถาม-ตอบจากเนื้อหา PDF")
-    user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่ (เช่น 'สาเหตุของ...')")
+    # 🔎 AI: สร้าง embedding และ FAISS index
+    if all_text_blocks:
+        st.markdown("---")
+        st.header("❓ ถาม-ตอบจากเนื้อหา PDF ด้วย AI")
+        user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
 
-    if user_question:
-        st.subheader("🔎 ข้อความที่ใกล้เคียงกับคำถาม:")
-        matches = []
+        # สร้างเวกเตอร์จากข้อความใน PDF
+        embeddings = model.encode(all_text_blocks)
+        dimension = embeddings.shape[1]
+        index = faiss.IndexFlatL2(dimension)
+        index.add(np.array(embeddings))
 
-        for page_num, block in all_text_blocks:
-            if any(word in block for word in user_question.split()):
-                matches.append((page_num, block))
+        if user_question:
+            # สร้างเวกเตอร์ของคำถาม
+            question_vec = model.encode([user_question])
+            D, I = index.search(np.array(question_vec), k=3)  # คืน 3 อันดับที่ใกล้เคียงที่สุด
 
-        if matches:
-            for page_num, match_text in matches:
-                st.markdown(f"📄 หน้า {page_num}")
-                st.success(match_text)
-        else:
-            st.warning("ไม่พบข้อความที่ใกล้เคียงกับคำถาม")
+            st.subheader("🔎 ข้อความที่เกี่ยวข้องที่สุด:")
+            for rank, idx in enumerate(I[0]):
+                st.markdown(f"**อันดับ {rank + 1}** (หน้า {page_text_map[idx]})")
+                st.success(all_text_blocks[idx])
