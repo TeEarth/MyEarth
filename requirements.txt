@@ -1,3 +1,5 @@
 streamlit
 pymupdf
 Pillow
+sentence-transformers
+faiss-cpu
