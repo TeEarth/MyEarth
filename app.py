@@ -53,7 +53,7 @@ if uploaded_file:
                 base_image = doc.extract_image(xref)
                 image_bytes = base_image["image"]
                 image = Image.open(io.BytesIO(image_bytes))
-                st.image(image, caption=f"ภาพที่ {img_index + 1}", use_column_width=True)
+                st.image(image, caption=f"ภาพที่ {img_index + 1}", use_container_width=True)
         else:
             st.info("ไม่มีภาพในหน้านี้")
 
