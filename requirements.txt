@@ -6,3 +6,6 @@ faiss-cpu
 transformers
 torch
 pythainlp
+nltk
+fitz
+numpy
