@@ -91,4 +91,3 @@ if uploaded_file:
 
             st.markdown("---")
             st.subheader("✅ คำตอบจาก AI:")
-            st.success(answer)
