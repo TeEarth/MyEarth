@@ -75,7 +75,7 @@ if uploaded_file:
     user_question = st.text_input("💬 พิมพ์คำถามของคุณที่นี่")
 
     if user_question:
-        question_tokens = word_tokenize(user_question.lower())
+        question_tokens = user_question.lower().split()
         matched_lines = []
         matched_indices = set()
         thresholds = [0.7, 0.6, 0.5]
