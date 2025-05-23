@@ -4,7 +4,7 @@ import pandas as pd
 # โหลดข้อมูลจากไฟล์ Excel
 @st.cache_data
 def load_data():
-    df = pd.read_excel("Special.xlsx", sheet_name="Special Force", engine="openpyxl")
+    df = pd.read_excel("Special.xlsx", sheet_name="Sheet1", engine="openpyxl")
     return df
 
 df = load_data()
