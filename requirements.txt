@@ -1,11 +1,1 @@
 streamlit
-PyMuPDF
-Pillow
-sentence-transformers
-faiss-cpu
-transformers
-torch
-pythainlp
-nltk
-fitz
-numpy
