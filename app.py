@@ -1,33 +1,22 @@
 import streamlit as st
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
 
-# ตั้งค่า credentials
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-client = gspread.authorize(creds)
+# โหลดข้อมูลจากไฟล์ Excel
+@st.cache_data
+def load_data():
+    df = pd.read_excel("Special.xlsx", sheet_name="Special Force", engine="openpyxl")
+    return df
 
-# เปิดไฟล์ Google Sheet และเลือก sheet ชื่อ "Special Force"
-spreadsheet_url = "https://docs.google.com/spreadsheets/d/1lbHvC-_tkGBKvF7Wc5Yl-vHzMKfRnvPkqiKrGdk5Vtk/edit#gid=509666436"
-sheet = client.open_by_url(spreadsheet_url).worksheet("Special Force")
+df = load_data()
 
-# ดึงข้อมูลทั้งหมด
-data = sheet.get_all_values()  # ข้อมูลทั้งหมดเป็น list of lists
-
-# ส่วนหัว (หัวตาราง)
-headers = data[0]
-rows = data[1:]
-
-# UI ด้วย Streamlit
-st.title("ถาม-ตอบ จากชีต Special Force")
+# ส่วนของแอพ
+st.title("ถาม-ตอบ จากไฟล์ Excel")
 question = st.text_input("พิมพ์คำถามที่ต้องการค้นหา:")
 
 if question:
-    found = False
-    for row in rows:
-        if row[0].strip() == question.strip():  # เทียบคอลัมน์ A
-            st.success(f"คำตอบ: {row[1]}")  # แสดงคอลัมน์ B
-            found = True
-            break
-    if not found:
-        st.warning("ไม่พบคำถามนี้ในชีต Special Force")
+    match = df[df.iloc[:, 0].astype(str).str.strip() == question.strip()]
+    if not match.empty:
+        answer = match.iloc[0, 1]  # คำตอบจากคอลัมน์ที่ 2 (B)
+        st.success(f"คำตอบ: {answer}")
+    else:
+        st.warning("ไม่พบคำถามนี้ในไฟล์ Excel")
