@@ -26,3 +26,4 @@ html_content = """
 @app.get("/", response_class=HTMLResponse)
 async def home():
     return html_content
+
