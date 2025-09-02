@@ -147,3 +147,4 @@ async def home():
 async def run_bot_endpoint():
     threading.Thread(target=run_bot, daemon=True).start()
     return HTMLResponse("<h2>Bot กำลังรันอยู่! กลับไปหน้า <a href='/'>หน้าแรก</a></h2>")
+
